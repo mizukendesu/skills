@@ -20,6 +20,20 @@ SKILL.md の Risk Scenario Selection から読む。起動時には読まない�
 3. 実害が大きい順に 3〜5 に絞る
 4. 各項目: 発生条件 / 影響 / この PR で起きるか、は Evidence Loop で判定する。ここでは仮説まで
 
+## Reachability before impact
+
+危険に見える usecase / function 本体だけで「実害がある」と報告しない。まず通常操作からその入力・状態へ到達できるかを確認する。
+
+必要に応じて、entry point、候補の絞り込み、UI / API 契約、権限、既存 guard、feature flag、状態遷移を上流から追う。
+
+```text
+risky implementation exists
+  ≠
+normal user flow can reach it
+```
+
+到達性が確認できない段階では `confirmed` にせず、hypothesis / `unverified` のまま扱う。
+
 ## Perspective（relevant なものだけ）
 
 全部見ない。この PR に効くものだけ選ぶ。
