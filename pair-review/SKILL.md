@@ -62,7 +62,7 @@ Agent は勝手に GitHub へ投稿・Approve しない。コードを書き換�
 引数・メッセージから PR 番号 / GitHub PR URL を取る。複数 PR は **順番に**（明示されたときだけ並列）。
 入力が Slack URL / スレッドなら、先に thread を読んで GitHub PR URL を特定してから script に渡す。PR が取れなければユーザーに聞く。`collect-pr-context.sh` は PR 番号 / GitHub PR URL のみ受け付ける。
 開始時に必ず言う: GitHub にはコメントしない。
-概要は 2–3 文 + 操作フロー（誰が、どの順で、何が走るか）。小学生にもわかる言葉。指摘はまだ出さない。
+概要は 2–3 文 + 操作フロー（誰が、どの順で、何が走るか）。**最初の説明は実装語彙ではなく、その機能を使う人・運用する人の語彙で書く**。指摘はまだ出さない。
 
 直後に full context を取る:
 
@@ -108,9 +108,11 @@ Human
 
 ### 1. Change Map
 
-diff の上から読まない。意味的な変更クラスタを作り、その中を依存の外側から 1 層ずつまとめる。途中の言い直しは先に合意する。
+最初は利用者 / 運用者の視点で、**今まで → この PR のあと → できなくなること → 変わらないこと**を説明する。必要になってから実装上の地図へ降りる。
 
-最初に把握する: entry point / contract、orchestration、state mutation、IO / side effects、domain logic、crossed boundaries、invariants、この PR が触っていないが必要な外側の配線。
+そのあと、diff の上から読まず、意味的な変更クラスタを作り、その中を依存の外側から 1 層ずつまとめる。途中の言い直しは先に合意する。
+
+実装上は entry point / contract、orchestration、state mutation、IO / side effects、domain logic、crossed boundaries、invariants、この PR が触っていないが必要な外側の配線を把握する。
 
 PR 種別に順序を組む。固定の 4 層ではない。
 
@@ -180,7 +182,8 @@ GitHub への投稿・Approve は Human Gate。[comment-policy.md](references/co
 | ユーザー | 動作 |
 |---|---|
 | コメントはしないで | 投稿禁止。チャットのみ |
-| 輪郭 / 小学生にも | 操作フローと平易な説明。指摘しない |
+| 輪郭 / 小学生にも | 利用者 / 運用者の操作フローと平易な説明。指摘しない |
+| 利用者目線で | 層を進めず、その場で利用者 / 運用者の言葉に言い直す |
 | 依存の外側から | Change Map。1 層ずつ |
 | コメント仕分け / ついてるコメント | Claim Ledger。既存 thread を仕分ける |
 | 対応せずクローズ | dismissed close を深掘り。resolved を信じない |
