@@ -4,9 +4,8 @@ description: >-
   Human-led pair review of someone else's PR. Agent is a bounded investigator:
   change map, claim ledger, falsify-first evidence, witness, origin,
   scale/cardinality. Never posts or approves until the user confirms a draft.
-  Use with /pair-review, or when the user pastes a PR/Slack URL and says
-  レビューしよう / コメントはしないで / 依存の外側から / コメント仕分け / 起きると困る不具合 /
-  Nを設定して / 発行クエリ / 改善してくれた / 最終チェック.
+  Use explicitly with /pair-review. Typical inputs include a PR URL, PR number,
+  or Slack thread containing a PR.
 disable-model-invocation: true
 ---
 # Pair Review（他人PR・Human-led Harness）
@@ -40,7 +39,7 @@ Agent は勝手に GitHub へ投稿・Approve しない。コードを書き換�
 1. GitHub には書かない。ユーザーが下書き OK するまで投稿しない
 2. diff の並び順で読まない。意味クラスタを作り、依存の外側から読む
 3. すべてを Claim Ledger で扱う。GitHub `resolved` は UI metadata。`resolved ≠ fixed`、`commit exists ≠ fix verified`
-4. Human hypothesis は Priority Claim。正本にしない。先に反証する
+4. Human hypothesis は通常の Agent 仮説より優先する Priority Claim。正本にしない。先に反証する
 5. 重大な `confirmed` には witness が要る。到達不能なら confirmed にしない
 6. finding は origin を判定する（introduced / exposed / pre-existing / unknown）
 7. 報告は短く。結論先出し。長い分析のあとに「一点だけ」へ圧縮する
@@ -56,20 +55,23 @@ Agent は勝手に GitHub へ投稿・Approve しない。コードを書き換�
 - [database-review.md](references/database-review.md): SQL / query-plan の証拠が必要なとき
 - [comment-policy.md](references/comment-policy.md): 下書きまたは投稿のとき
 
+パスはこの skill root からの相対パス。
+
 ## 入口
 
-引数・メッセージから PR 番号 / URL / Slack スレッドを取る。複数 PR は **順番に**（明示されたときだけ並列）。
+引数・メッセージから PR 番号 / GitHub PR URL を取る。複数 PR は **順番に**（明示されたときだけ並列）。
+入力が Slack URL / スレッドなら、先に thread を読んで GitHub PR URL を特定してから script に渡す。PR が取れなければユーザーに聞く。`collect-pr-context.sh` は PR 番号 / GitHub PR URL のみ受け付ける。
 開始時に必ず言う: GitHub にはコメントしない。
 概要は 2–3 文 + 操作フロー（誰が、どの順で、何が走るか）。小学生にもわかる言葉。指摘はまだ出さない。
 
 直後に full context を取る:
 
 ```bash
-path/to/your/skills/pair-review/scripts/collect-pr-context.sh <PR番号 or URL>
+scripts/collect-pr-context.sh <PR番号 or URL>
 ```
 
 会話内に `snapshot`（repo, number, base_sha, head_sha, collected_at）を保持する。JSON 永続化はしない。
-`incomplete` / `pagination_error` があれば完全な snapshot だと思わない。
+`incomplete` / `errors` があれば完全な snapshot だと思わない。`reason: unstable_head` なら取り直しをユーザーに伝える。
 
 ユーザーが飛ばす層は飛ばしてよい。止めない指示（「全部深掘り」「続けて」）は、Approve 判断に最も効く未了 Claim へ進む。
 
@@ -83,7 +85,7 @@ background polling はしない。
 - 「改善してくれた」のあとは、旧 head より後の差分だけ見る
 
 ```bash
-path/to/your/skills/pair-review/scripts/collect-pr-context.sh --identity <PR番号 or URL>
+scripts/collect-pr-context.sh --identity <PR番号 or URL>
 ```
 
 ## Main loop
@@ -134,7 +136,7 @@ GitHub thread state ≠ technical claim state ≠ human decision state。
 
 ### 4. Evidence Loop
 
-Outer: Approve 判断に最も効く / risk が高い未解決 Claim から Inner へ。自由探索しない。
+Outer: 調査順は dismissed-close → Human Priority Claim → Agent 仮説。各 class 内は Approve 影響 / risk が高いものから。自由探索しない。
 
 Inner: 反証を先に試みる → evidence → witness → origin → status。不十分なら追加調査。technical terminal、または remaining uncertainty が人間に渡せるまで。
 

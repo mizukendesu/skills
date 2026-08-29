@@ -114,8 +114,8 @@ def snapshot_from_rest(owner, name, number):
 incomplete = []
 
 
-def mark_incomplete(connection, message, **extra):
-    item = {"connection": connection, "message": message}
+def mark_incomplete(connection, message, kind="fetch", **extra):
+    item = {"connection": connection, "message": message, "kind": kind}
     item.update(extra)
     incomplete.append(item)
 
@@ -134,12 +134,13 @@ def paginate(query, variables, pick, connection_name):
             return nodes
         cursor = info.get("endCursor")
         if not cursor:
-            mark_incomplete(connection_name, "hasNextPage but no endCursor")
+            mark_incomplete(connection_name, "hasNextPage but no endCursor", kind="pagination")
             return nodes
     else:
         mark_incomplete(
             connection_name,
             f"stopped after {MAX_PAGES} pages; hasNextPage still true",
+            kind="pagination",
         )
         return nodes
 
@@ -284,249 +285,283 @@ query($id: ID!, $cursor: String) {
 }
 """
 
-base_vars = {"owner": OWNER, "name": NAME, "number": NUMBER}
+def collect_once(snapshot, rest_pr):
+    global incomplete
+    incomplete = []
+    base_vars = {"owner": OWNER, "name": NAME, "number": NUMBER}
 
-try:
-    gql_pr = graphql(PR_Q, base_vars)["repository"]["pullRequest"]
-except Exception as e:
-    mark_incomplete("pr", str(e))
-    gql_pr = None
+    try:
+        gql_pr = graphql(PR_Q, base_vars)["repository"]["pullRequest"]
+    except Exception as e:
+        mark_incomplete("pr", str(e))
+        gql_pr = None
 
-try:
-    commit_nodes = paginate(
-        COMMITS_Q,
-        base_vars,
-        lambda d: d["repository"]["pullRequest"]["commits"],
-        "commits",
-    )
-except Exception as e:
-    mark_incomplete("commits", str(e))
-    commit_nodes = []
+    try:
+        commit_nodes = paginate(
+            COMMITS_Q,
+            base_vars,
+            lambda d: d["repository"]["pullRequest"]["commits"],
+            "commits",
+        )
+    except Exception as e:
+        mark_incomplete("commits", str(e))
+        commit_nodes = []
 
-try:
-    file_nodes = paginate(
-        FILES_Q,
-        base_vars,
-        lambda d: d["repository"]["pullRequest"]["files"],
-        "files",
-    )
-except Exception as e:
-    mark_incomplete("files", str(e))
-    file_nodes = []
+    try:
+        file_nodes = paginate(
+            FILES_Q,
+            base_vars,
+            lambda d: d["repository"]["pullRequest"]["files"],
+            "files",
+        )
+    except Exception as e:
+        mark_incomplete("files", str(e))
+        file_nodes = []
 
-try:
-    issue_comment_nodes = paginate(
-        ISSUE_COMMENTS_Q,
-        base_vars,
-        lambda d: d["repository"]["pullRequest"]["comments"],
-        "issue_comments",
-    )
-except Exception as e:
-    mark_incomplete("issue_comments", str(e))
-    issue_comment_nodes = []
+    try:
+        issue_comment_nodes = paginate(
+            ISSUE_COMMENTS_Q,
+            base_vars,
+            lambda d: d["repository"]["pullRequest"]["comments"],
+            "issue_comments",
+        )
+    except Exception as e:
+        mark_incomplete("issue_comments", str(e))
+        issue_comment_nodes = []
 
-try:
-    review_nodes = paginate(
-        REVIEWS_Q,
-        base_vars,
-        lambda d: d["repository"]["pullRequest"]["reviews"],
-        "reviews",
-    )
-except Exception as e:
-    mark_incomplete("reviews", str(e))
-    review_nodes = []
-
-
-def paginate_threads():
-    threads = []
-    cursor = None
-    for page in range(MAX_PAGES):
-        data = graphql(THREADS_Q, {**base_vars, "cursor": cursor})
-        conn = data["repository"]["pullRequest"]["reviewThreads"]
-        for node in conn.get("nodes") or []:
-            threads.append(complete_thread_comments(node))
-        info = conn.get("pageInfo") or {}
-        if not info.get("hasNextPage"):
-            return threads
-        cursor = info.get("endCursor")
-        if not cursor:
-            mark_incomplete("reviewThreads", "hasNextPage but no endCursor")
-            return threads
-    mark_incomplete(
-        "reviewThreads",
-        f"stopped after {MAX_PAGES} pages; hasNextPage still true",
-    )
-    return threads
+    try:
+        review_nodes = paginate(
+            REVIEWS_Q,
+            base_vars,
+            lambda d: d["repository"]["pullRequest"]["reviews"],
+            "reviews",
+        )
+    except Exception as e:
+        mark_incomplete("reviews", str(e))
+        review_nodes = []
 
 
-def complete_thread_comments(thread):
-    comments_conn = thread.get("comments") or {}
-    comments = list(comments_conn.get("nodes") or [])
-    info = comments_conn.get("pageInfo") or {}
-    cursor = info.get("endCursor")
-    pages = 0
-    while info.get("hasNextPage"):
-        if not cursor:
-            mark_incomplete(
-                "reviewThreads.comments",
-                "hasNextPage but no endCursor",
-                thread_id=thread.get("id"),
-            )
-            break
-        pages += 1
-        if pages > MAX_PAGES:
-            mark_incomplete(
-                "reviewThreads.comments",
-                f"stopped after {MAX_PAGES} pages; hasNextPage still true",
-                thread_id=thread.get("id"),
-            )
-            break
-        try:
-            data = graphql(
-                THREAD_COMMENTS_Q,
-                {"id": thread["id"], "cursor": cursor},
-            )
-        except Exception as e:
-            mark_incomplete(
-                "reviewThreads.comments",
-                str(e),
-                thread_id=thread.get("id"),
-            )
-            break
-        node = data.get("node") or {}
-        comments_conn = node.get("comments") or {}
-        comments.extend(comments_conn.get("nodes") or [])
+    def paginate_threads():
+        threads = []
+        cursor = None
+        for page in range(MAX_PAGES):
+            data = graphql(THREADS_Q, {**base_vars, "cursor": cursor})
+            conn = data["repository"]["pullRequest"]["reviewThreads"]
+            for node in conn.get("nodes") or []:
+                threads.append(complete_thread_comments(node))
+            info = conn.get("pageInfo") or {}
+            if not info.get("hasNextPage"):
+                return threads
+            cursor = info.get("endCursor")
+            if not cursor:
+                mark_incomplete("reviewThreads", "hasNextPage but no endCursor", kind="pagination")
+                return threads
+        mark_incomplete(
+            "reviewThreads",
+            f"stopped after {MAX_PAGES} pages; hasNextPage still true",
+            kind="pagination",
+        )
+        return threads
+
+
+    def complete_thread_comments(thread):
+        comments_conn = thread.get("comments") or {}
+        comments = list(comments_conn.get("nodes") or [])
         info = comments_conn.get("pageInfo") or {}
         cursor = info.get("endCursor")
+        pages = 0
+        while info.get("hasNextPage"):
+            if not cursor:
+                mark_incomplete(
+                    "reviewThreads.comments",
+                    "hasNextPage but no endCursor",
+                    kind="pagination",
+                    thread_id=thread.get("id"),
+                )
+                break
+            pages += 1
+            if pages > MAX_PAGES:
+                mark_incomplete(
+                    "reviewThreads.comments",
+                    f"stopped after {MAX_PAGES} pages; hasNextPage still true",
+                    kind="pagination",
+                    thread_id=thread.get("id"),
+                )
+                break
+            try:
+                data = graphql(
+                    THREAD_COMMENTS_Q,
+                    {"id": thread["id"], "cursor": cursor},
+                )
+            except Exception as e:
+                mark_incomplete(
+                    "reviewThreads.comments",
+                    str(e),
+                    thread_id=thread.get("id"),
+                )
+                break
+            node = data.get("node") or {}
+            comments_conn = node.get("comments") or {}
+            comments.extend(comments_conn.get("nodes") or [])
+            info = comments_conn.get("pageInfo") or {}
+            cursor = info.get("endCursor")
+        out = {
+            "id": thread.get("id"),
+            "is_resolved": thread.get("isResolved"),
+            "is_outdated": thread.get("isOutdated"),
+            "path": thread.get("path"),
+            "line": thread.get("line"),
+            "original_line": thread.get("originalLine"),
+            "comments": [shape_comment(c) for c in comments],
+        }
+        return out
+
+
+    def login(obj):
+        if not obj:
+            return None
+        author = obj.get("author") if "author" in obj else obj
+        if not author:
+            return None
+        return author.get("login")
+
+
+    def shape_comment(c):
+        commit = c.get("commit") or {}
+        return {
+            "id": c.get("databaseId"),
+            "author": login(c),
+            "body": c.get("body"),
+            "created_at": c.get("createdAt"),
+            "url": c.get("url"),
+            "commit_oid": commit.get("oid"),
+        }
+
+
+    try:
+        review_threads = paginate_threads()
+    except Exception as e:
+        mark_incomplete("reviewThreads", str(e))
+        review_threads = []
+
+    checks = []
+    try:
+        nwo = snapshot["repo"]
+        r = run(
+            [
+                "gh",
+                "pr",
+                "checks",
+                str(NUMBER),
+                "--repo",
+                nwo,
+                "--json",
+                "name,state,bucket,link,startedAt,completedAt,description,workflow",
+            ],
+            ok_codes=(0, 1, 8),
+        )
+        if r.stdout.strip():
+            checks = json.loads(r.stdout)
+    except Exception as e:
+        mark_incomplete("checks", str(e))
+
+    pr_out = {
+        "title": rest_pr.get("title"),
+        "body": rest_pr.get("body"),
+        "url": rest_pr.get("html_url"),
+        "author": (rest_pr.get("user") or {}).get("login"),
+        "base_ref": rest_pr.get("base", {}).get("ref"),
+        "head_ref": rest_pr.get("head", {}).get("ref"),
+        "draft": rest_pr.get("draft"),
+        "state": rest_pr.get("state"),
+        "additions": rest_pr.get("additions"),
+        "deletions": rest_pr.get("deletions"),
+        "changed_files": rest_pr.get("changed_files"),
+        "user": (rest_pr.get("user") or {}).get("login"),
+    }
+    if gql_pr:
+        pr_out.update(
+            {
+                "title": gql_pr.get("title") or pr_out["title"],
+                "body": gql_pr.get("body") if gql_pr.get("body") is not None else pr_out["body"],
+                "url": gql_pr.get("url") or pr_out["url"],
+                "author": login(gql_pr) or pr_out["author"],
+                "base_ref": gql_pr.get("baseRefName") or pr_out["base_ref"],
+                "head_ref": gql_pr.get("headRefName") or pr_out["head_ref"],
+                "draft": gql_pr.get("isDraft") if gql_pr.get("isDraft") is not None else pr_out["draft"],
+                "state": gql_pr.get("state") or pr_out["state"],
+                "review_decision": gql_pr.get("reviewDecision"),
+                "additions": gql_pr.get("additions"),
+                "deletions": gql_pr.get("deletions"),
+                "changed_files": gql_pr.get("changedFiles"),
+            }
+        )
+
+    try:
+        end_snapshot, _end_pr = snapshot_from_rest(OWNER, NAME, NUMBER)
+    except Exception as e:
+        mark_incomplete("snapshot", str(e), kind="fetch")
+        end_snapshot = snapshot
+    unstable = end_snapshot.get("head_sha") != snapshot["head_sha"]
+    if unstable:
+        mark_incomplete(
+            "snapshot",
+            "head changed while collecting context",
+            kind="unstable_head",
+            start_head=snapshot["head_sha"],
+            end_head=end_snapshot.get("head_sha"),
+        )
+
     out = {
-        "id": thread.get("id"),
-        "is_resolved": thread.get("isResolved"),
-        "is_outdated": thread.get("isOutdated"),
-        "path": thread.get("path"),
-        "line": thread.get("line"),
-        "original_line": thread.get("originalLine"),
-        "comments": [shape_comment(c) for c in comments],
-    }
-    return out
-
-
-def login(obj):
-    if not obj:
-        return None
-    author = obj.get("author") if "author" in obj else obj
-    if not author:
-        return None
-    return author.get("login")
-
-
-def shape_comment(c):
-    commit = c.get("commit") or {}
-    return {
-        "id": c.get("databaseId"),
-        "author": login(c),
-        "body": c.get("body"),
-        "created_at": c.get("createdAt"),
-        "url": c.get("url"),
-        "commit_oid": commit.get("oid"),
-    }
-
-
-try:
-    review_threads = paginate_threads()
-except Exception as e:
-    mark_incomplete("reviewThreads", str(e))
-    review_threads = []
-
-checks = []
-try:
-    nwo = snapshot["repo"]
-    r = run(
-        [
-            "gh",
-            "pr",
-            "checks",
-            str(NUMBER),
-            "--repo",
-            nwo,
-            "--json",
-            "name,state,bucket,link,startedAt,completedAt,description,workflow",
+        "snapshot": snapshot,
+        "incomplete": bool(incomplete),
+        "errors": list(incomplete),
+        "pr": pr_out,
+        "commits": [
+            {
+                "oid": (n.get("commit") or {}).get("oid"),
+                "message": (n.get("commit") or {}).get("messageHeadline"),
+                "committed_at": (n.get("commit") or {}).get("committedDate"),
+            }
+            for n in commit_nodes
         ],
-        ok_codes=(0, 1, 8),
-    )
-    if r.stdout.strip():
-        checks = json.loads(r.stdout)
-except Exception as e:
-    mark_incomplete("checks", str(e))
+        "files": [
+            {
+                "path": n.get("path"),
+                "additions": n.get("additions"),
+                "deletions": n.get("deletions"),
+                "change_type": n.get("changeType"),
+            }
+            for n in file_nodes
+        ],
+        "issue_comments": [shape_comment(c) for c in issue_comment_nodes],
+        "reviews": [
+            {
+                "id": n.get("databaseId"),
+                "author": login(n),
+                "state": n.get("state"),
+                "body": n.get("body"),
+                "submitted_at": n.get("submittedAt"),
+                "url": n.get("url"),
+            }
+            for n in review_nodes
+        ],
+        "review_threads": review_threads,
+        "checks": checks,
+    }
 
-pr_out = {
-    "title": rest_pr.get("title"),
-    "body": rest_pr.get("body"),
-    "url": rest_pr.get("html_url"),
-    "author": (rest_pr.get("user") or {}).get("login"),
-    "base_ref": rest_pr.get("base", {}).get("ref"),
-    "head_ref": rest_pr.get("head", {}).get("ref"),
-    "draft": rest_pr.get("draft"),
-    "state": rest_pr.get("state"),
-    "additions": rest_pr.get("additions"),
-    "deletions": rest_pr.get("deletions"),
-    "changed_files": rest_pr.get("changed_files"),
-    "user": (rest_pr.get("user") or {}).get("login"),
-}
-if gql_pr:
-    pr_out.update(
-        {
-            "title": gql_pr.get("title") or pr_out["title"],
-            "body": gql_pr.get("body") if gql_pr.get("body") is not None else pr_out["body"],
-            "url": gql_pr.get("url") or pr_out["url"],
-            "author": login(gql_pr) or pr_out["author"],
-            "base_ref": gql_pr.get("baseRefName") or pr_out["base_ref"],
-            "head_ref": gql_pr.get("headRefName") or pr_out["head_ref"],
-            "draft": gql_pr.get("isDraft") if gql_pr.get("isDraft") is not None else pr_out["draft"],
-            "state": gql_pr.get("state") or pr_out["state"],
-            "review_decision": gql_pr.get("reviewDecision"),
-            "additions": gql_pr.get("additions"),
-            "deletions": gql_pr.get("deletions"),
-            "changed_files": gql_pr.get("changedFiles"),
-        }
-    )
+    if any(e.get("kind") == "unstable_head" for e in incomplete):
+        out["reason"] = "unstable_head"
+        out["incomplete"] = True
+    return out, any(e.get("kind") == "unstable_head" for e in incomplete)
 
-out = {
-    "snapshot": snapshot,
-    "incomplete": bool(incomplete),
-    "pagination_error": incomplete or None,
-    "pr": pr_out,
-    "commits": [
-        {
-            "oid": (n.get("commit") or {}).get("oid"),
-            "message": (n.get("commit") or {}).get("messageHeadline"),
-            "committed_at": (n.get("commit") or {}).get("committedDate"),
-        }
-        for n in commit_nodes
-    ],
-    "files": [
-        {
-            "path": n.get("path"),
-            "additions": n.get("additions"),
-            "deletions": n.get("deletions"),
-            "change_type": n.get("changeType"),
-        }
-        for n in file_nodes
-    ],
-    "issue_comments": [shape_comment(c) for c in issue_comment_nodes],
-    "reviews": [
-        {
-            "id": n.get("databaseId"),
-            "author": login(n),
-            "state": n.get("state"),
-            "body": n.get("body"),
-            "submitted_at": n.get("submittedAt"),
-            "url": n.get("url"),
-        }
-        for n in review_nodes
-    ],
-    "review_threads": review_threads,
-    "checks": checks,
-}
+out, unstable = collect_once(snapshot, rest_pr)
+if unstable:
+    try:
+        snapshot, rest_pr = snapshot_from_rest(OWNER, NAME, NUMBER)
+    except Exception as e:
+        die(f"failed to reload PR identity: {e}")
+    out, unstable = collect_once(snapshot, rest_pr)
 
 json.dump(out, sys.stdout, ensure_ascii=False, indent=2)
 sys.stdout.write("\n")

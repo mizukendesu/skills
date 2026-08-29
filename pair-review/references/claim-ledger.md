@@ -82,7 +82,7 @@ approve_blocker: unknown / depends on N
 
 ## Priority Claim と confirmation bias
 
-ユーザーの仮説は Priority Claim として最優先で調べる。正本にはしない。
+ユーザーの仮説は通常の Agent 仮説より優先する Priority Claim。正本にはしない。対応せずクローズ由来より後。
 
 ```text
 Hypothesis → Try to falsify → Gather supporting evidence → Build witness → Update Claim
@@ -90,7 +90,7 @@ Hypothesis → Try to falsify → Gather supporting evidence → Build witness �
 
 例: 「二重引当が起きる」なら、先に unique constraint / transaction / lock / idempotency / existing guard / unreachable path を探す。突破可能なら witness を組む。
 
-Agent が見つけた仮説も同じ仕組み。ユーザーのものを先に Inner Loop する。
+Agent が見つけた仮説も同じ仕組み。
 
 ## 既存コメントの仕分け
 
@@ -197,6 +197,15 @@ Claim を選ぶ
 
 ### Outer Loop
 
-未解決 Claim から「Approve 判断に最も影響する / risk が高い」ものを次に選ぶ。自由探索しない。
+自由探索しない。class の順を守り、各 class 内では Approve 影響 / risk が高いものから選ぶ。
 
-ユーザーが仮説を置いた失敗モードより先に、対応せずクローズ由来の Claim を潰す（旧 Skill の順序は維持）。その後 Priority Claim、その後 Agent 仮説。
+```text
+Investigation order:
+
+1. dismissed-close claims
+2. Human Priority Claims
+3. Agent-generated claims
+
+Within each class:
+higher approve-impact / risk first
+```
