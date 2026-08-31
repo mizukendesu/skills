@@ -11,6 +11,18 @@
 - `@cursor` は書かない（Background Agent 召喚）
 - コードを書き換えない。作者ブランチへ commit しない
 
+## Internal evidence ≠ public comment
+
+内部調査では十分な evidence を集める。ただし、その全量を GitHub に出さない。
+公開下書きは **相手が判断・修正するために必要な最小限** に圧縮する。
+
+- 独立した Claim は原則として別々に扱う。1 つの finding に unrelated な performance / style / type-safety 等を混ぜない
+- 探索途中の仮説、捨てた経路、長い推論ログは公開しない
+- raw production data、ユーザー/顧客を識別できる値、内部 URL、秘密情報、不要な内部識別子は貼らない
+- sensitive な evidence が必要なら、値そのものではなく一般化・集約した結果を下書きにする。必要なら Human に公開範囲を確認する
+
+調査に必要な情報量と、公開レビューに必要な情報量は別物。
+
 ## 下書きのラベル
 
 `must:` / `q:` / `suggestion:` / `imo:` / `nits:` / `praise:` / `FYI:`

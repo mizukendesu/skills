@@ -60,6 +60,20 @@ JS 側の突合・ソート・ネストは O 記法 + vector を入れた実数�
 試算だけで温度を決めない。実測で cardinality が小さいなら指摘を落とす。大きいなら残す。
 実測 SQL の出し方は database-review。
 
+## Finding と改善案は別 Claim
+
+性能問題が confirmed でも、思いついた改善案まで正しいとは限らない。
+
+```text
+current implementation is slow
+  ≠
+proposed alternative is faster
+```
+
+具体的な改善案を勧めるなら、可能な範囲でその案自身の query shape / round trips / scanned rows / complexity を確認する。DB なら [database-review.md](database-review.md) のルールで、baseline / current / proposed を同じ代表 cardinality で比べる。
+
+改善案を実測・検証できない場合は、問題と evidence だけを confirmed として残し、修正案は `q:` / hypothesis / possible direction として扱う。未検証の案を「この形なら速い」と断定しない。
+
 ## Domain defaults
 
 core には業務固有の N を置かない。対象リポジトリや会話でユーザーが既定 N を置いたらそれを使う。
