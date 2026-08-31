@@ -2,7 +2,7 @@
 
 SKILL.md の Main loop 2 / 4 から読む。起動時には読まない。
 
-既存 GitHub review comment、resolved comment、対応せず close、ユーザーの仮説、Agent の仮説、CI / test failure から生じた疑義は、すべて同じ Claim として扱う。
+既存 GitHub review comment、resolved comment、対応せず close、ユーザーの仮説、Agent の仮説、CI / test failure から生じた疑義は、すべて同じ Claim model で扱う。ただし独立した論点を 1 つの Claim に混ぜない。
 
 ## 三層は独立
 
@@ -50,6 +50,23 @@ approve_blocker:     yes | no | unknown
 next_investigation:
 remaining_evidence:  判定不能なときに何が足りないか
 ```
+
+## Claim の粒度
+
+**1 Claim = evidence / status / severity / decision を独立して更新できる 1 つの主張**。
+
+同じコード箇所から複数の懸念が出ても、根拠や判断が別なら分ける。たとえば correctness、performance、query shape、type safety、maintainability / style は、同じ修正箇所でも別 Claim になり得る。
+
+```text
+performance regression is confirmed
+  ≠
+implementation style is wrong
+  ≠
+proposed optimization is verified
+```
+
+1 つの confirmed finding を根拠に、隣接する別論点まで confirmed 扱いしない。
+公開コメントでまとめるかは Decision Gate / Human Gate で決める。内部の Claim は先に分離しておく。
 
 ## Status を誰が付けられるか
 
