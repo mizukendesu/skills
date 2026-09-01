@@ -171,14 +171,36 @@ witness がまだ成立するなら technical は `confirmed` のまま、GitHub
 - expected result
 
 ```text
-State:  shipping A と B が同一キーへ集約可能
-Input:  ...
-Path:   X → Y → repository.z
-Result: 二重消費
-Expected: 一度だけ消費
+State:  A
+Input:  B
+Path:   X → Y → Z
+Result: C
+Expected: D
 ```
 
 到達可能性を示せないなら、もっともらしいだけで `confirmed` にしない。`unverified` か、狭いエッジとして impact を落とす。
+
+## Blocker 候補では recovery path も確認する
+
+重大な Claim を Approve blocker / `must:` 候補として提示する前に、通常の利用・運用で抜けられる経路がないか確認する。
+
+見るものの例:
+
+- retry / 再実行
+- 別の UI 操作や次の通常操作
+- background job / reconciliation
+- admin / ops の既存操作
+- 自然に状態が収束する後続イベント
+
+```text
+failure is reachable
+  ≠
+user is permanently stuck
+```
+
+recovery があれば finding 自体を falsified にする必要はない。頻度・復旧コスト・データ整合性への影響を含めて severity / approve_blocker を更新する。
+
+通常経路で復旧できず、特殊な手作業や直接データ修正しかない場合は、その事実を evidence として blocker 判断に含める。
 
 ## Origin
 
@@ -203,8 +225,9 @@ Claim を選ぶ
   → 反証を試みる
   → evidence を集める
   → witness を作る（confirmed にする場合）
+  → blocker 候補なら recovery path を確認する
   → origin を判定する
-  → status を更新する
+  → status / impact を更新する
   → 不十分なら追加調査
   → technical terminal、または remaining uncertainty が明示されるまで
 ```
