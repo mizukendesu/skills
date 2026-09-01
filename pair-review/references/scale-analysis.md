@@ -5,6 +5,22 @@ SQL をユーザーに渡す段階になったら [database-review.md](database-
 
 絶対本数だけでなく、「この PR で何に比例する処理が新しく増えたか」を見る。
 
+## Applicability gate
+
+Decision Gate 前に、scale / runtime を暗黙に飛ばさない。まず次のどれかに分類する。
+
+```text
+checked
+not-applicable
+remaining uncertainty
+```
+
+`not-applicable` は、collection / repeated IO / query shape / external calls / meaningful in-memory growth など、入力サイズで増幅する変更が実質ない場合。詳細分析は不要。
+
+`remaining uncertainty` は、cardinality や実測がなく判断できない場合。何が足りないかと、Approve 判断に影響するかを残す。
+
+「小さそう」「普段は件数が少ないはず」だけで `not-applicable` にしない。
+
 ## Cardinality vector
 
 単一の N だけで足りないことが多い。必要なら vector を定義する。
