@@ -51,6 +51,7 @@ Agent は勝手に GitHub へ投稿・Approve しない。コードを書き換�
 
 - [claim-ledger.md](references/claim-ledger.md): 既存コメントまたは technical claim があるとき
 - [failure-scenarios.md](references/failure-scenarios.md): risk scenario を選ぶとき
+- [design-review.md](references/design-review.md): 設計 / docs PR、または entity / lifecycle / boundary の設計判断があるとき
 - [scale-analysis.md](references/scale-analysis.md): collection / cardinality に敏感な経路があるとき
 - [database-review.md](references/database-review.md): SQL / query-plan の証拠が必要なとき
 - [comment-policy.md](references/comment-policy.md): 下書きまたは投稿のとき
@@ -60,7 +61,7 @@ Agent は勝手に GitHub へ投稿・Approve しない。コードを書き換�
 ## 入口
 
 引数・メッセージから PR 番号 / GitHub PR URL を取る。複数 PR は **順番に**（明示されたときだけ並列）。
-入力が Slack URL / スレッドなら、先に thread を読んで GitHub PR URL を特定してから script に渡す。PR が取れなければユーザーに聞く。`collect-pr-context.sh` は PR 番号 / GitHub PR URL のみ受け付ける。
+入力が Slack URL / スレッドなら、先に thread を読む。GitHub PR URL だけでなく、同じ thread にある関連仕様、DesignDoc、スプレッドシート、添付も原典候補として控える。PR が取れなければユーザーに聞く。`collect-pr-context.sh` は PR 番号 / GitHub PR URL のみ受け付ける。
 開始時に必ず言う: GitHub にはコメントしない。
 概要は 2–3 文 + 操作フロー（誰が、どの順で、何が走るか）。**最初の説明は実装語彙ではなく、その機能を使う人・運用する人の語彙で書く**。指摘はまだ出さない。
 
@@ -72,6 +73,16 @@ scripts/collect-pr-context.sh <PR番号 or URL>
 
 会話内に `snapshot`（repo, number, base_sha, head_sha, collected_at）を保持する。JSON 永続化はしない。
 `incomplete` / `errors` があれば完全な snapshot だと思わない。`reason: unstable_head` なら取り直しをユーザーに伝える。
+
+snapshot 後に PR を `implementation` / `design-docs` / `mixed` に分類する。
+
+- `design-docs`: [design-review.md](references/design-review.md) を読み、原典候補を確認してから Change Map を作る
+- `mixed`: 設計判断を先に扱い、その後に実装の Evidence Loop へ進む
+- `implementation`: 通常の Main loop
+
+新しい entity / table、独立 lifecycle / state machine、authorization / transaction boundary、cross-service workflow を導入する PR は、実装差分があっても設計判断を含む。
+
+設計資料と関連コードの探索が main conversation を圧迫する場合、利用可能なら `pair-design-reviewer` subagent に調査だけを委譲する。親はユーザーとの対話、Priority Claim、Claim Ledger、Decision Gate、GitHub 投稿判断を保持する。subagent が無い場合は親が [design-review.md](references/design-review.md) に従う。
 
 ユーザーが飛ばす層は飛ばしてよい。`次` / `続けて` / 「全部深掘り」は Decision Gate へのショートカットではなく、Approve 判断に最も効く未了 Claim へ進む。
 
@@ -108,11 +119,25 @@ Decision Gate
 Human
 ```
 
+`design-docs` / `mixed` は Change Map の前半を次に置き換える。
+
+```text
+Source Map
+    ↓
+Operation Flow / Invariants
+    ↓
+Entity / State / Relationship Boundaries
+    ↓
+Design Claims
+    ↓
+Claim Ledger 以降
+```
+
 ### 1. Change Map
 
 最初は利用者 / 運用者の視点で、**今まで → この PR のあと → できなくなること → 変わらないこと**を説明する。必要になってから実装上の地図へ降りる。
 
-そのあと、diff の上から読まず、意味的な変更クラスタを作り、その中を依存の外側から 1 層ずつまとめる。途中の言い直しは先に合意する。
+そのあと、diff の上から読まず、意味的な変更クラスタを作り、その中を依存の外側から 1 層ずつまとめる。途中でユーザーの説明を言い直すときは、まず元の一文を短く復唱し、こちらの解釈を足す前に合意する。
 
 実装上は entry point / contract、orchestration、state mutation、IO / side effects、domain logic、crossed boundaries、invariants、この PR が触っていないが必要な外側の配線を把握する。
 
@@ -206,6 +231,7 @@ GitHub への投稿・Approve は Human Gate。[comment-policy.md](references/co
 | コメント仕分け / ついてるコメント | Claim Ledger。既存 thread を仕分ける |
 | 対応せずクローズ | dismissed close を深掘り。resolved を信じない |
 | 起きると困る不具合 | Risk Scenario Selection → Evidence Loop |
+| 設計について「なぜ？」 / テーブル要る？ / 原典は？ | 設計判断を問う Priority Claim。design-review を読み、既存 bot comment より先に扱う |
 | 次 / 続けて / 全部深掘り | Decision Gate へ飛ばず、次に効く未了 Claim へ |
 | N を設定 / 発行クエリ | Scale / Runtime Evidence |
 | クエリくれる？ | database-review。1 本。実行しない |
