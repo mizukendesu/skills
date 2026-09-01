@@ -73,7 +73,7 @@ scripts/collect-pr-context.sh <PR番号 or URL>
 会話内に `snapshot`（repo, number, base_sha, head_sha, collected_at）を保持する。JSON 永続化はしない。
 `incomplete` / `errors` があれば完全な snapshot だと思わない。`reason: unstable_head` なら取り直しをユーザーに伝える。
 
-ユーザーが飛ばす層は飛ばしてよい。止めない指示（「全部深掘り」「続けて」）は、Approve 判断に最も効く未了 Claim へ進む。
+ユーザーが飛ばす層は飛ばしてよい。`次` / `続けて` / 「全部深掘り」は Decision Gate へのショートカットではなく、Approve 判断に最も効く未了 Claim へ進む。
 
 ## Snapshot freshness
 
@@ -100,6 +100,8 @@ Risk Scenario Selection
 Evidence Loop（falsify → evidence → witness → origin → status）
     ↓
 Scale / Runtime Evidence
+    ↓
+Decision Gate preflight
     ↓
 Decision Gate
     ↓
@@ -146,12 +148,28 @@ Inner: 反証を先に試みる → evidence → witness → origin → status�
 
 ### 5. Scale / Runtime Evidence
 
-読み書き・集合演算があるとき。単一 N ではなく必要なら cardinality vector。base/head の delta を見る。
-詳細は [scale-analysis.md](references/scale-analysis.md)。SQL が要るときだけ [database-review.md](references/database-review.md)。
+Decision Gate 前に、すべてのレビューで scale / runtime を **`checked` / `not-applicable` / `remaining uncertainty`** のどれかに分類する。
+
+collection / cardinality に敏感な経路なら、単一 N ではなく必要に応じて cardinality vector と base/head の delta を見る。詳細は [scale-analysis.md](references/scale-analysis.md)。SQL が要るときだけ [database-review.md](references/database-review.md)。
+
+明らかに対象外なら深掘りは不要。ただし暗黙に飛ばさず `not-applicable` として preflight に残す。
 
 ### 6. Decision Gate
 
-最終報告は短く整理する。
+Decision Gate に入る直前に、短い preflight を必ず行う。未確認項目があれば Gate に入らず、該当する未了 Claim / phase に戻る。
+
+```text
+Change Map:            checked
+Claims / scenarios:    checked
+Evidence / reachability: checked
+CI / tests:            checked | unavailable
+Scale / runtime:       checked | not-applicable | remaining uncertainty
+Snapshot freshness:    checked
+```
+
+`remaining uncertainty` / `unavailable` は失敗ではない。何が不足していて、Approve 判断にどう影響するかを明示する。
+
+preflight 後の最終報告は短く整理する。
 
 - confirmed blocker
 - confirmed non-blocker
@@ -171,8 +189,8 @@ GitHub への投稿・Approve は Human Gate。[comment-policy.md](references/co
 - high-risk scenarios を検証済み、または remaining uncertainty が明示されている
 - blocking candidate が technical terminal、または人間が判断できる不確実性になっている
 - origin が概ね判定済み
-- relevant CI / tests を確認済み
-- scale-sensitive path は cardinality を確認済み、または「何の実測が足りないか」が明示済み
+- relevant CI / tests を確認済み、または unavailable として明示済み
+- scale / runtime が `checked` / `not-applicable` / `remaining uncertainty` のいずれかに分類済み
 - 追加調査をしても Approve 判断に必要な情報が実質増えない
 
 `unverified` を残してよい。confirmed / falsified に押し込まない。
@@ -188,11 +206,11 @@ GitHub への投稿・Approve は Human Gate。[comment-policy.md](references/co
 | コメント仕分け / ついてるコメント | Claim Ledger。既存 thread を仕分ける |
 | 対応せずクローズ | dismissed close を深掘り。resolved を信じない |
 | 起きると困る不具合 | Risk Scenario Selection → Evidence Loop |
-| 全部深掘り / 続けて | 次に効く未了 Claim へ |
+| 次 / 続けて / 全部深掘り | Decision Gate へ飛ばず、次に効く未了 Claim へ |
 | N を設定 / 発行クエリ | Scale / Runtime Evidence |
 | クエリくれる？ | database-review。1 本。実行しない |
 | 計算量 | Scale。JS/CPU は DB と分けて |
-| 最終チェック | `--identity`、必要なら refresh。Decision Gate |
+| 最終チェック | `--identity`、必要なら refresh → preflight → Decision Gate |
 | 出しますか / 下書き | comment-policy。Human Gate |
 | 改善してくれた | `--identity` → SHA が変わっていれば refresh。旧 head より後の差分だけ |
 | もっとシンプルで | 一文に圧縮 |
