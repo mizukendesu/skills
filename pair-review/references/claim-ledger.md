@@ -87,6 +87,29 @@ Human decision or explicit external decision:
 Agent は risk を説明する。risk を受容するのは人間。
 「発生率低そうなので accepted-risk」と勝手に閉じない。
 
+### `accepted-risk` は明示確認する
+
+Human-only は「Human の発言から受容を推測してよい」という意味ではない。
+疑問形、迷い、仮置き、Agent への相談は decision として扱わない。
+
+```text
+「許容かな？」
+「non-blocking でよさそう？」
+「accepted-risk でもいいかも」
+```
+
+この段階では Agent は自分の評価を説明し、必要なら **「accepted-risk として閉じますか？」** と確認する。status はまだ変更しない。
+
+`accepted-risk` へ遷移できるのは、Human が受容を明示したときだけ。
+
+```text
+「許容する」
+「accepted-risk で」
+「そのリスクは受け入れる」
+```
+
+Agent の `non-blocking` 評価と Human の risk acceptance を混同しない。
+
 `unverified` は最後まで残してよい。production data が無い、到達可能性が切れない、などなら:
 
 ```text
