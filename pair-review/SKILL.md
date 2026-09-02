@@ -42,8 +42,20 @@ Agent は勝手に GitHub へ投稿・Approve しない。コードを書き換�
 4. Human hypothesis は通常の Agent 仮説より優先する Priority Claim。正本にしない。先に反証する
 5. 重大な `confirmed` には witness が要る。到達不能なら confirmed にしない
 6. finding は origin を判定する（introduced / exposed / pre-existing / unknown）
-7. 報告は短く。結論先出し。長い分析のあとに「一点だけ」へ圧縮する
+7. 報告は短く、結論先出し。調査手順の名前や内部 status をそのまま会話へ出さず、利用者の言葉へ圧縮する
 8. 不確実性を消さない。所在を明示して `unverified` のまま止めてよい
+
+## 対話契約
+
+`Change Map`、`Source Map`、`Claim Ledger`、`Evidence Loop`、`Priority Claim`、`witness`、`origin`、`technical terminal` などは内部の調査語彙。ユーザーが手順や詳細を求めた場合を除き、見出しや進捗報告に使わない。
+
+通常は調査を内部でまとめて進め、ユーザーには次だけを平易な言葉で返す。
+
+- この PR が何を変えるか
+- 判断に効く懸念。既存コメントで指摘済みか、新しく見つけたものか
+- 次に確認または投稿する一手
+
+各 phase の終了ごとに「合っていますか」「次へ進みますか」と止めない。止めるのは、未確定の前提によって調査方向や結論が変わるとき、または GitHub への投稿・Approve 前の Human Gate。ユーザーが段階的な walkthrough を希望した場合だけ、途中結果を分けて見せる。
 
 ## References（必要時だけ読む）
 
@@ -76,15 +88,21 @@ scripts/collect-pr-context.sh <PR番号 or URL>
 
 snapshot 後に PR を `implementation` / `design-docs` / `mixed` に分類する。
 
-- `design-docs`: [design-review.md](references/design-review.md) を読み、原典候補を確認してから Change Map を作る
+- `design-docs`: [design-review.md](references/design-review.md) を読み、原典候補を確認してから設計調査を行う
 - `mixed`: 設計判断を先に扱い、その後に実装の Evidence Loop へ進む
 - `implementation`: 通常の Main loop
 
 新しい entity / table、独立 lifecycle / state machine、authorization / transaction boundary、cross-service workflow を導入する PR は、実装差分があっても設計判断を含む。
 
-設計資料と関連コードの探索が main conversation を圧迫する場合、利用可能なら `pair-design-reviewer` subagent に調査だけを委譲する。親はユーザーとの対話、Priority Claim、Claim Ledger、Decision Gate、GitHub 投稿判断を保持する。subagent が無い場合は親が [design-review.md](references/design-review.md) に従う。
+`design-docs` / `mixed` で、次のいずれかに該当し、`pair-design-reviewer` が利用可能なら、会話が長くなってからではなく調査開始時に subagent へ委譲する。
 
-ユーザーが飛ばす層は飛ばしてよい。`次` / `続けて` / 「全部深掘り」は Decision Gate へのショートカットではなく、Approve 判断に最も効く未了 Claim へ進む。
+- 新しい entity / table、または独立した lifecycle / state machine を導入する
+- PR 以外に仕様資料、会話、既存コードなど複数の原典を照合する
+- authorization / transaction boundary、cross-service workflow を扱う
+
+subagent は調査だけを行う。親はユーザーとの対話、内部 ledger への統合、最終判断、GitHub 投稿判断を保持する。subagent が利用できない場合は止まらず、親が [design-review.md](references/design-review.md) に従う。
+
+以下の phase は調査を漏らさないための内部手順であり、順番どおりユーザーへ表示する台本ではない。ユーザーが飛ばす層は飛ばしてよい。`次` / `続けて` / 「全部深掘り」は Decision Gate へのショートカットではなく、Approve 判断に最も効く未了 Claim へ進む。
 
 ## Snapshot freshness
 
@@ -100,6 +118,8 @@ scripts/collect-pr-context.sh --identity <PR番号 or URL>
 ```
 
 ## Main loop
+
+この loop は内部の検証順。ユーザーが walkthrough を求めない限り、phase 名ごとの報告や承認待ちは行わない。
 
 ```text
 Change Map
@@ -137,7 +157,7 @@ Claim Ledger 以降
 
 最初は利用者 / 運用者の視点で、**今まで → この PR のあと → できなくなること → 変わらないこと**を説明する。必要になってから実装上の地図へ降りる。
 
-そのあと、diff の上から読まず、意味的な変更クラスタを作り、その中を依存の外側から 1 層ずつまとめる。途中でユーザーの説明を言い直すときは、まず元の一文を短く復唱し、こちらの解釈を足す前に合意する。
+そのあと、diff の上から読まず、意味的な変更クラスタを作り、その中を依存の外側から調べる。ユーザーが段階表示を求めた場合だけ 1 層ずつ見せる。途中でユーザーの説明を言い直し、その差が結論を変えるときは、まず元の一文を短く復唱し、こちらの解釈を足す前に合意する。
 
 実装上は entry point / contract、orchestration、state mutation、IO / side effects、domain logic、crossed boundaries、invariants、この PR が触っていないが必要な外側の配線を把握する。
 
@@ -194,7 +214,7 @@ Snapshot freshness:    checked
 
 `remaining uncertainty` / `unavailable` は失敗ではない。何が不足していて、Approve 判断にどう影響するかを明示する。
 
-preflight 後の最終報告は短く整理する。
+preflight 後の最終報告は短く整理する。次の分類名は内部では保持するが、ユーザーには通常「今回止めたい問題」「問題ではなかったもの」「修正を確認できたもの」「まだ確認できないもの」のように平易に言い換える。
 
 - confirmed blocker
 - confirmed non-blocker

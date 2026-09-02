@@ -13,7 +13,7 @@ mkdir -p path/to/your/.cursor/agents
 ln -sfn path/to/your/skills/agents/pair-design-reviewer.md path/to/your/.cursor/agents/pair-design-reviewer.md
 ```
 
-subagent は任意。未導入でも `pair-review` 本体が同じ設計レビュー手順を実行する。
+subagent の導入は任意。導入済みなら `pair-review` が明示された条件に従って設計調査へ使い、未導入なら親が同じ手順を実行する。
 
 ## pair-review
 

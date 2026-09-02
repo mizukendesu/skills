@@ -1,6 +1,6 @@
 # Design Review
 
-設計 / docs PR、または新しい entity / table、独立 lifecycle / state machine、authorization / transaction boundary、cross-service workflow を含む PR で読む。実装 PR の failure / witness / origin を置き換えず、その前に設計判断を検証する。
+設計 / docs PR、または新しい entity / table、独立 lifecycle / state machine、authorization / transaction boundary、cross-service workflow を含む PR で読む。これは内部の調査手順であり、各見出しをそのままユーザーへ見せる台本ではない。実装 PR の failure / witness / origin を置き換えず、その前に設計判断を検証する。
 
 ## 調査順
 
@@ -14,6 +14,16 @@
 ```
 
 Greptile など既存 reviewer の実装欠落コメントから始めない。ユーザーの「なぜこの table が要るのか」「この entity は何を表すのか」「原典はどこか」のような設計判断を問う発言は Priority Claim とし、先に扱う。
+
+## ユーザーへの返し方
+
+原典、操作、境界、代替案は一度内部で通してから、結論をまとめて返す。通常は次を短く伝える。
+
+- 設計を利用者・運用者の言葉で一文にした理解
+- 判断に効く懸念。既存指摘と新規発見を区別する
+- 推奨する次の確認またはコメント
+
+`Source Map`、`invariant`、`entity boundary`、`Design Claim` などの調査語彙を、説明なしに見出しとして並べない。各段階で同意を求めず、原典の曖昧さによってモデルや結論が変わる場合だけ質問する。詳細表や内部 status は、ユーザーが根拠や手順を求めたときに開示する。
 
 ## 1. Source Map
 
@@ -100,11 +110,11 @@ PR が扱う概念を次に仕分ける。
 
 比較軸は、現在の複雑性、移行可能性、誤った状態の作りやすさ、履歴と繰り返し、原典との整合。実装が速いことだけで採用案を決めず、将来要件の確度だけで過剰設計もしない。
 
-## Design Review Packet
+## Design Review Packet（親への内部返却）
 
 subagent を使う場合は、PR / snapshot、原典候補、ユーザーの Priority Claim、関連 path を渡す。subagent は会話履歴を持たない前提で、必要な context を prompt に含める。
 
-返却は短い packet に固定する。
+返却は短い packet に固定する。この YAML をユーザーへそのまま表示しない。
 
 ```yaml
 design_review:
