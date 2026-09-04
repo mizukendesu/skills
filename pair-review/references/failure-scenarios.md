@@ -34,6 +34,65 @@ normal user flow can reach it
 
 到達性が確認できない段階では `confirmed` にせず、hypothesis / `unverified` のまま扱う。
 
+## Async handoff durability
+
+state mutation のあとに queue / job / webhook / external API などへ処理を引き渡す変更では、`partial failure / retry` を任意観点にしない。**各 handoff boundary を明示的に展開して確認する。**
+
+守りたい invariant は次。
+
+```text
+durable business state
+  と
+unfinished downstream work の存在
+
+が恒久的に食い違わない
+```
+
+### Producer side
+
+状態を確定してから非同期処理を enqueue / send する場合、少なくとも確認する。
+
+- handoff より前に何が durable になるか
+- enqueue / send が失敗したとき、誰が再試行するか
+- 元の trigger がもう一度成立するか
+- 先行した state mutation により trigger 条件が消えないか
+- 再送不能なら、durable intent / outbox / reconciliation / operator recovery のどれが残るか
+
+```text
+state mutation succeeded
+  +
+handoff failed
+  +
+original trigger is no longer repeatable
+  =
+recovery gap candidate
+```
+
+`waitUntil`、fire-and-forget、ログ出力、例外の握りつぶしを recovery とみなさない。
+
+### Consumer side
+
+1 event / job が複数対象へ side effect を fan-out する場合、少なくとも確認する。
+
+- 一部だけ失敗したとき、失敗が job / step の失敗として上位へ伝播するか
+- catch して結果値へ変換したことで retry が止まらないか
+- retry の粒度は全体 / failed item のどちらか
+- 先に成功した対象を再実行しても idempotent か
+- 未完了対象を後から発見できる durable marker / reconciliation があるか
+- terminal failure を operator が回復できるか
+
+```text
+error was caught
+  ≠
+failed work is recoverable
+
+retry exists
+  ≠
+this failure reaches retry
+```
+
+producer / consumer の両方がある場合は、それぞれ別 Claim として扱ってよい。1 つの「retry 対応済み」でまとめない。
+
 ## Perspective（relevant なものだけ）
 
 全部見ない。この PR に効くものだけ選ぶ。
