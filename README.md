@@ -4,6 +4,7 @@ Cursor Agent Skills。クローンしたレポジトリを個人スキルへ sym
 
 ```bash
 ln -sfn path/to/your/skills/pair-review path/to/your/.cursor/skills/pair-review
+ln -sfn path/to/your/skills/grill-and-review path/to/your/.cursor/skills/grill-and-review
 ```
 
 設計 / docs PR の調査を別 context に分離する optional subagent:
@@ -14,6 +15,12 @@ ln -sfn path/to/your/skills/agents/pair-design-reviewer.md path/to/your/.cursor/
 ```
 
 subagent の導入は任意。導入済みなら `pair-review` が明示された条件に従って設計調査へ使い、未導入なら親が同じ手順を実行する。
+
+## grill-and-review
+
+実装前の Plan / Design を Human と詰め、コード・原典を調査しながら未確定 decision を依存順に決め、最後に Plan 自体を反証して Implementation Readiness を出す。
+
+使い方: `/grill-and-review`。Plan ファイル、DesignDoc、issue / ticket、Slack thread、または未整理の変更依頼を渡す。
 
 ## pair-review
 
