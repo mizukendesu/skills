@@ -55,6 +55,8 @@ Agent は勝手に GitHub へ投稿・Approve しない。コードを書き換�
 - 判断に効く懸念。既存コメントで指摘済みか、新しく見つけたものか
 - 次に確認または投稿する一手
 
+Decision Gate では、結論だけでなく **今回実際に何を確認したか** を短く示す。内部チェックリストをそのまま読み上げるのではなく、最終判断を支えた PR 固有の確認内容をユーザーが追える形にする。
+
 各 phase の終了ごとに「合っていますか」「次へ進みますか」と止めない。止めるのは、未確定の前提によって調査方向や結論が変わるとき、または GitHub への投稿・Approve 前の Human Gate。ユーザーが段階的な walkthrough を希望した場合だけ、途中結果を分けて見せる。
 
 ## References（必要時だけ読む）
@@ -214,7 +216,45 @@ Snapshot freshness:    checked
 
 `remaining uncertainty` / `unavailable` は失敗ではない。何が不足していて、Approve 判断にどう影響するかを明示する。
 
-preflight 後の最終報告は短く整理する。次の分類名は内部では保持するが、ユーザーには通常「今回止めたい問題」「問題ではなかったもの」「修正を確認できたもの」「まだ確認できないもの」のように平易に言い換える。
+#### Decision report
+
+preflight 後の最終報告は、**結論 + review coverage + 残る不確実性**を短く出す。`Approve 相当です` や `問題ありません` だけで Human Gate へ進まない。
+
+review coverage は「内部 phase を通った」という自己申告ではなく、**今回の PR で実際に確認した事実**を書く。通常 3〜7 項目に絞る。
+
+- 仕様 / operation flow と実装の対応で確認したこと
+- 主要な failure scenario / reachability / recovery で確認したこと
+- PR 固有の state mutation、boundary、side effect、繰り返し実行などで確認したこと
+- relevant な CI / tests と、そのテストが何を押さえているか
+- scale / runtime が relevant なら、何に比例する処理を確認したか
+- 既存 bot 指摘があれば、修正を確認できたもの
+
+`Change Map checked`、`Evidence checked` のようなラベルだけを並べない。逆に、探索した全ファイル、捨てた仮説、内部 reasoning を全量出す必要もない。Human が「どこまで見た上でその結論なのか」を判断できる粒度にする。
+
+残るものは coverage と混ぜずに分ける。
+
+- remaining uncertainty / unavailable evidence
+- 専用テストがないが構造上は成立すると判断した範囲
+- Human が明示的に受容した `accepted-risk` / `deferred`
+
+基本形:
+
+```text
+結論: Approve 相当 | blocker あり | 判断保留
+
+確認したこと:
+- この PR 固有の確認 1
+- この PR 固有の確認 2
+- relevant CI / tests / scale の確認
+
+残っていること:
+- 未確認・不確実性。なければ「なし」
+- Human が受容した risk があれば明示
+```
+
+この report は Human の最終判断を置き換えない。Agent の `Approve 相当` は recommendation であり、GitHub Approve への遷移ではない。
+
+技術的な分類は内部では保持するが、ユーザーには通常「今回止めたい問題」「問題ではなかったもの」「修正を確認できたもの」「まだ確認できないもの」のように平易に言い換える。
 
 - confirmed blocker
 - confirmed non-blocker
@@ -257,6 +297,7 @@ GitHub への投稿・Approve は Human Gate。[comment-policy.md](references/co
 | クエリくれる？ | database-review。1 本。実行しない |
 | 計算量 | Scale。JS/CPU は DB と分けて |
 | 最終チェック | `--identity`、必要なら refresh → preflight → Decision Gate |
+| Approve 相当？ / 問題ない？ | Decision report。結論だけでなく、今回確認したこと / 残る不確実性 / Human が受容した risk を示す |
 | 出しますか / 下書き | comment-policy。Human Gate |
 | 改善してくれた | `--identity` → SHA が変わっていれば refresh。旧 head より後の差分だけ |
 | もっとシンプルで | 一文に圧縮 |
