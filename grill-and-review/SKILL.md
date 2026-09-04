@@ -187,6 +187,36 @@ relevant な観点だけを見る。
 - duplicate event / at-least-once delivery で壊れないか
 - TOCTOU / race によって別結果にならないか
 
+### Async handoff durability
+
+Plan に **durable state mutation → queue / job / webhook / external API** の handoff があるなら、ここは省略しない。
+
+Producer side:
+
+- handoff より前に何が durable になるか
+- enqueue / send が失敗したとき、誰が再試行するか
+- state mutation 後も元の trigger を再実行できるか
+- trigger が消えるなら、durable intent / outbox / reconciliation / operator recovery のどれを使うか
+
+Consumer side が fan-out するなら:
+
+- 一部だけ失敗したとき、job / step は failure として扱われるか
+- error を catch して成功扱いに変えたことで retry が止まらないか
+- retry の粒度と、既成功対象の idempotency はどうするか
+- 未完了対象を後から発見・回復できるか
+
+Plan がここを決めていないのに、`retry 対応`、`非同期なので安全`、`ログで追える` などの一文だけで Ready にしない。
+
+```text
+state mutation succeeded
+  +
+handoff failed
+  +
+trigger is no longer repeatable
+  =
+recovery decision required
+```
+
 ### Failure / recovery
 
 - 途中失敗で何だけ残るか
