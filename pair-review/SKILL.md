@@ -69,7 +69,7 @@ Decision Gate では、結論だけでなく **今回実際に何を確認した
 - [design-review.md](references/design-review.md): 設計 / docs PR、または entity / lifecycle / boundary の設計判断があるとき
 - [scale-analysis.md](references/scale-analysis.md): collection / cardinality に敏感な経路があるとき
 - [database-review.md](references/database-review.md): SQL / query-plan の証拠が必要なとき
-- [minimality-review.md](references/minimality-review.md): correctness / failure / scale を確認した後、同じ要求をより少ない ownership complexity で満たせるかを見るとき
+- [minimality-review.md](references/minimality-review.md): cheap triage で simplification candidate が出たときだけ読む
 - [comment-policy.md](references/comment-policy.md): 下書きまたは投稿のとき
 
 パスはこの skill root からの相対パス。
@@ -136,7 +136,7 @@ Evidence Loop（falsify → evidence → witness → origin → status）
     ↓
 Scale / Runtime Evidence
     ↓
-Minimality Review
+Minimality Triage
     ↓
 Decision Gate preflight
     ↓
@@ -205,27 +205,19 @@ collection / cardinality に敏感な経路なら、単一 N ではなく必要�
 
 明らかに対象外なら深掘りは不要。ただし暗黙に飛ばさず `not-applicable` として preflight に残す。
 
-### 6. Minimality Review
+### 6. Minimality Triage
 
-correctness / failure / recovery と relevant な scale を確認してから [minimality-review.md](references/minimality-review.md) を読む。
-ここでは「正しいか」を再評価するのではなく、**同じ behavior / safety / recovery のまま、所有する概念を減らせるか**だけを見る。
+correctness / failure / recovery と relevant な scale を確認した後、reference を読む前に cheap triage だけ行う。
 
-meaningful な追加について、少なくとも次を確認する。
+新しい state / entity / lifecycle、abstraction / wrapper / interface、dependency / hand-rolled native functionality、async / service boundary、config / flag / mode、duplicated invariant / guard が増えていなければ **`lean`** として終える。
 
-- その追加自体が requirement に必要か
-- codebase に既存の ownership point / helper / pattern がないか
-- stdlib / language / browser / framework / DB native で成立しないか
-- 既存 dependency で十分なのに新しい dependency / hand-rolled code を増やしていないか
-- abstraction / entity / state / config / layer / boundary が一つの実装・caller・値だけのために増えていないか
-- 同じ invariant / guard / transformation を複数箇所に持っていないか
-- behavior を変えずに state / boundary / indirection / files / branches を減らせないか
+candidate がある場合だけ [minimality-review.md](references/minimality-review.md) を読む。**candidate ≠ finding**。single implementation / caller / value も調査トリガーにすぎず、責務境界として必要なら残す。
 
-LOC は副次指標。短くなっても state / boundary / ownership が増える案は simplification と扱わない。
+`design-docs` は [design-review.md](references/design-review.md) の Alternatives が minimal / proposed / domain-pure を既に比較するため **`covered-by-design-review`** とし、同じ設計を再レビューしない。`mixed` は design-review で扱った設計概念を除き、実装差分だけ triage する。
 
-meaningful な finding は独立した Claim にする。correctness / performance concern と同じコードにあっても evidence と severity を混ぜない。
-minimality finding だけを理由に blocker severity を継承させず、Approve 判断に効くなら「同じ要求をより単純に満たせる」という別の技術判断として Human に渡す。
+minimality の探索中に reachable failure / invariant violation / security issue を見つけたら complexity finding にしない。通常の correctness Claim に昇格し Evidence Loop に戻す。
 
-必要性を確認済みの validation / authorization / transaction / retry / idempotency / durable recovery / explicit requirement は、短くするために削らない。それ自体を疑うなら通常の Claim / design decision に戻す。
+meaningful な simplification finding は correctness / performance concern と混ぜず独立 Claim にする。minimality finding だけを理由に blocker severity を継承させない。
 
 ### 7. Decision Gate
 
@@ -237,7 +229,7 @@ Claims / scenarios:      checked
 Evidence / reachability: checked
 CI / tests:              checked | unavailable
 Scale / runtime:         checked | not-applicable | remaining uncertainty
-Minimality:              checked
+Minimality:              lean | reviewed | covered-by-design-review
 Snapshot freshness:      checked
 ```
 
@@ -254,7 +246,7 @@ review coverage は「内部 phase を通った」という自己申告ではな
 - PR 固有の state mutation、boundary、side effect、繰り返し実行などで確認したこと
 - relevant な CI / tests と、そのテストが何を押さえているか
 - scale / runtime が relevant なら、何に比例する処理を確認したか
-- minimality で判断に効く finding があれば、何を再利用 / native 化 / collapse できると確認したか
+- minimality で判断に効く finding を深掘りしたなら、その結論
 - 既存 bot 指摘があれば、修正を確認できたもの
 
 `Change Map checked`、`Evidence checked` のようなラベルだけを並べない。逆に、探索した全ファイル、捨てた仮説、内部 reasoning を全量出す必要もない。Human が「どこまで見た上でその結論なのか」を判断できる粒度にする。
@@ -273,7 +265,7 @@ review coverage は「内部 phase を通った」という自己申告ではな
 確認したこと:
 - この PR 固有の確認 1
 - この PR 固有の確認 2
-- relevant CI / tests / scale / minimality の確認
+- relevant CI / tests / scale の確認
 
 残っていること:
 - 未確認・不確実性。なければ「なし」
@@ -304,7 +296,8 @@ GitHub への投稿・Approve は Human Gate。[comment-policy.md](references/co
 - origin が概ね判定済み
 - relevant CI / tests を確認済み、または unavailable として明示済み
 - scale / runtime が `checked` / `not-applicable` / `remaining uncertainty` のいずれかに分類済み
-- minimality を確認し、meaningful な simplification candidate は独立 Claim として Human が判断できる状態になっている
+- minimality が `lean` / `reviewed` / `covered-by-design-review` のいずれかに分類済み
+- reviewed の場合、meaningful な simplification candidate は独立 Claim として Human が判断できる状態になっている
 - 追加調査をしても Approve 判断に必要な情報が実質増えない
 
 `unverified` を残してよい。confirmed / falsified に押し込まない。
@@ -325,7 +318,7 @@ GitHub への投稿・Approve は Human Gate。[comment-policy.md](references/co
 | N を設定 / 発行クエリ | Scale / Runtime Evidence |
 | クエリくれる？ | database-review。1 本。実行しない |
 | 計算量 | Scale。JS/CPU は DB と分けて |
-| 過剰設計？ / ponytail / 削れる？ | correctness / failure の確認後に Minimality Review。reuse / native / collapse 候補を独立 Claim として扱う |
+| 過剰設計？ / ponytail / 削れる？ | correctness / failure の確認後に Minimality Triage。candidate がある場合だけ deep review |
 | 最終チェック | `--identity`、必要なら refresh → preflight → Decision Gate |
 | Approve 相当？ / 問題ない？ | Decision report。結論だけでなく、今回確認したこと / 残る不確実性 / Human が受容した risk を示す |
 | 出しますか / 下書き | comment-policy。Human Gate |
