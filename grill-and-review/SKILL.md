@@ -4,8 +4,8 @@ description: >-
   Human-led pre-implementation review for a plan or design in a repository.
   Investigate facts from docs and code, interview the Human about real decisions,
   keep the working plan aligned with those decisions, then challenge the plan
-  against source-of-truth, failure modes, lifecycle, rollout, tests, and scale.
-  Use explicitly with /grill-and-review.
+  against source-of-truth, failure modes, lifecycle, rollout, tests, scale, and
+  unnecessary complexity. Use explicitly with /grill-and-review.
 disable-model-invocation: true
 ---
 # Grill and Review
@@ -31,6 +31,7 @@ Agent:
 - 推奨案とトレードオフを出す
 - 決まった内容を working plan に反映する
 - Plan が固まったら、いったん自分の前提を疑って review する
+- correctness / recovery を保ったまま不要な complexity を減らせないか最後に challenge する
 
 **事実を Human に聞かない。決定を Agent が勝手にしない。**
 
@@ -48,6 +49,10 @@ Agent:
 Plan がまだ無い場合は、会話内に working plan を持ちながら grill し、最後に実装計画へまとめる。
 明示的な Plan ファイルが対象なら、Human が決めた内容をそのファイルへ段階的に反映してよい。アプリコードや unrelated な repo file は変更しない。
 
+## References（必要時だけ読む）
+
+- [minimality-review.md](references/minimality-review.md): adversarial review 後の cheap triage で simplification candidate が出たときだけ読む
+
 ## 全体フロー
 
 ```text
@@ -60,6 +65,8 @@ Decision Tree Grill
 Working Plan
         ↓
 Adversarial Plan Review
+        ↓
+Minimality Triage
         ↓
 Implementation Readiness
 ```
@@ -245,20 +252,35 @@ recovery decision required
 - flag OFF / rollback / migration 前後が説明できるか
 - deploy 順序に依存するなら順序が plan にあるか
 
-## 5. finding が出たら Plan に戻す
+## 5. Minimality Triage
+
+Adversarial Plan Review で correctness / failure / recovery の骨格が成立してから cheap triage する。
+
+Plan が新しい table / entity / state / lifecycle、service / repository / wrapper / interface、dependency / hand-rolled native functionality、async / service boundary、config / flag / mode、duplicated invariant / guard を増やさないなら **`lean`** として終える。
+
+candidate がある場合だけ [minimality-review.md](references/minimality-review.md) を読む。**candidate ≠ finding**。single implementation / caller / value も調査トリガーにすぎず、domain / trust / transaction / provider / ownership boundary として意味があるなら残す。
+
+より小さい案が observable behavior / safety / recovery / settled decision を変えるなら、その場で採用せず新しい decision として grill に戻す。
+
+minimality の探索中に reachable failure / invariant violation / security issue を見つけたら complexity finding にしない。Adversarial Plan Review に戻して correctness issue として扱う。
+
+Plan を simplify したら、影響した failure scenario / boundary だけ再確認する。全 review を最初から繰り返さない。
+
+## 6. finding が出たら Plan に戻す
 
 review で問題が出ても、その場で実装へ進まない。
 
 - **fact の不足** → Agent が追加調査
 - **decision の不足** → 次の grill round
 - **Plan の記述不足** → working plan を修正
+- **unnecessary complexity** → behavior / safety を変えないなら Plan を simplify。変えるなら decision に戻す
 - **known limitation** → Human が受容するか決める
 
 Agent は勝手に `accepted risk` にしない。
 
 review 後に Plan を直したら、変更した部分に効く failure scenario だけ再確認する。最初から全探索し直さない。
 
-## 6. Implementation Readiness
+## 7. Implementation Readiness
 
 最後は結論だけで終わらず、Human が coverage を確認できる形で返す。
 
@@ -269,6 +291,7 @@ review 後に Plan を直したら、変更した部分に効く failure scenari
 - 今回の source / operation flow で確認したこと
 - failure / retry / lifecycle で確認したこと
 - code / test / scale で確認したこと
+- minimality が lean か、deep review したならその結論
 
 Plan に反映した主な決定:
 - ...
@@ -281,7 +304,7 @@ Plan に反映した主な決定:
 ```
 
 `Ready` は「絶対にバグがない」ではない。
-**実装者が新しい product decision を発明せずに着手でき、残る不確実性が Human に見えている**状態を指す。
+**実装者が新しい product decision を発明せずに着手でき、残る不確実性が Human に見えており、同じ保証を持つ明らかに小さい Plan を放置していない**状態を指す。
 
 ## Stop condition
 
@@ -292,6 +315,7 @@ Plan に反映した主な決定:
 - decision tree の frontier が空
 - implementation に必要な boundary / failure / rollout が plan に残っている
 - high-impact failure scenario を review 済み
+- minimality が `lean`、または candidate を review して simplification / tradeoff が Plan / Human に反映されている
 - remaining uncertainty / known limitation が明示されている
 - Human と shared understanding に到達している
 
@@ -306,7 +330,8 @@ Human が「実装して」「次へ」と明示したら、この skill の責�
 | これで認識あってる？ | source / code と照合して、fact と decision を分離 |
 | 原典どこ？ | source of truth を追う。推測と明示仕様を分ける |
 | A / B / それで | decision を working plan に反映して次の frontier |
-| plan review して | grill 済みなら adversarial review。未決定があれば grill に戻す |
+| plan review して | grill 済みなら adversarial review → minimality triage。未決定があれば grill に戻す |
+| ponytail / 過剰設計？ / もっと小さくできる？ | correctness / failure の骨格を先に確認し、Minimality Triage。candidate がある場合だけ deep review |
 | 実装してよい？ | Implementation Readiness。結論 + 確認したこと + 残り |
 | pair-review して | Plan が対象ならこの skill の review phase と同型。PR / 実装済みコードなら pair-review の責務 |
 
