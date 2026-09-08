@@ -51,7 +51,7 @@ Plan がまだ無い場合は、会話内に working plan を持ちながら gri
 
 ## References（必要時だけ読む）
 
-- [minimality-review.md](references/minimality-review.md): adversarial review で correctness / failure / recovery を確認した後、同じ要求をより少ない ownership complexity で満たせるかを見るとき
+- [minimality-review.md](references/minimality-review.md): adversarial review 後の cheap triage で simplification candidate が出たときだけ読む
 
 ## 全体フロー
 
@@ -66,7 +66,7 @@ Working Plan
         ↓
 Adversarial Plan Review
         ↓
-Minimality Challenge
+Minimality Triage
         ↓
 Implementation Readiness
 ```
@@ -252,35 +252,19 @@ recovery decision required
 - flag OFF / rollback / migration 前後が説明できるか
 - deploy 順序に依存するなら順序が plan にあるか
 
-## 5. Minimality Challenge
+## 5. Minimality Triage
 
-Adversarial Plan Review で correctness / failure / recovery の骨格が成立してから [minimality-review.md](references/minimality-review.md) を読む。
-ここでは requirement を削るのではなく、**その requirement を実現するために Plan が提案した implementation shape が本当に最小か**を疑う。
+Adversarial Plan Review で correctness / failure / recovery の骨格が成立してから cheap triage する。
 
-Plan に追加される meaningful な要素ごとに確認する。
+Plan が新しい table / entity / state / lifecycle、service / repository / wrapper / interface、dependency / hand-rolled native functionality、async / service boundary、config / flag / mode、duplicated invariant / guard を増やさないなら **`lean`** として終える。
 
-- 新しい table / entity / state / lifecycle は既存 ownership に載せられないか
-- 新しい service / repository / wrapper / interface は複数の実装・caller を本当に持つか
-- 新しい async boundary / event / job は sync または既存 handoff で成立しないか
-- 新しい config / feature flag / mode は実際に複数値を運用する必要があるか
-- stdlib / framework / DB native / codebase の既存 primitive を再利用できないか
-- 同じ invariant / guard / derived state を複数箇所へ持ち込んでいないか
-- 同じ behavior / safety / recovery のまま state / boundary / dependency / indirection を減らせないか
+candidate がある場合だけ [minimality-review.md](references/minimality-review.md) を読む。**candidate ≠ finding**。single implementation / caller / value も調査トリガーにすぎず、domain / trust / transaction / provider / ownership boundary として意味があるなら残す。
 
-LOC は副次指標。コードが短くても state や boundary が増える案は「小さい Plan」と扱わない。
+より小さい案が observable behavior / safety / recovery / settled decision を変えるなら、その場で採用せず新しい decision として grill に戻す。
 
-次は simplification の対象から保護する。
+minimality の探索中に reachable failure / invariant violation / security issue を見つけたら complexity finding にしない。Adversarial Plan Review に戻して correctness issue として扱う。
 
-- source of truth にある explicit requirement
-- trust-boundary validation / authorization / security
-- data loss を防ぐ error handling
-- adversarial review で必要性を確認した transaction / retry / idempotency / concurrency control
-- adversarial review で必要性を確認した durable handoff / reconciliation / operator recovery
-- Human が明示的に選択した tradeoff
-
-より小さい案が observable behavior / safety / recovery / accepted decision を変えるなら、その場で採用しない。新しい decision として grill に戻す。
-
-簡略化を採用して working plan を変更したら、影響した failure scenario / boundary だけ再確認する。全 review を最初から繰り返さない。
+Plan を simplify したら、影響した failure scenario / boundary だけ再確認する。全 review を最初から繰り返さない。
 
 ## 6. finding が出たら Plan に戻す
 
@@ -307,7 +291,7 @@ review 後に Plan を直したら、変更した部分に効く failure scenari
 - 今回の source / operation flow で確認したこと
 - failure / retry / lifecycle で確認したこと
 - code / test / scale で確認したこと
-- minimality で削った / 残した主要な complexity
+- minimality が lean か、deep review したならその結論
 
 Plan に反映した主な決定:
 - ...
@@ -331,7 +315,7 @@ Plan に反映した主な決定:
 - decision tree の frontier が空
 - implementation に必要な boundary / failure / rollout が plan に残っている
 - high-impact failure scenario を review 済み
-- minimality challenge を実施し、削れる complexity は Plan に反映済み、または tradeoff として Human に見えている
+- minimality が `lean`、または candidate を review して simplification / tradeoff が Plan / Human に反映されている
 - remaining uncertainty / known limitation が明示されている
 - Human と shared understanding に到達している
 
@@ -346,8 +330,8 @@ Human が「実装して」「次へ」と明示したら、この skill の責�
 | これで認識あってる？ | source / code と照合して、fact と decision を分離 |
 | 原典どこ？ | source of truth を追う。推測と明示仕様を分ける |
 | A / B / それで | decision を working plan に反映して次の frontier |
-| plan review して | grill 済みなら adversarial review → minimality challenge。未決定があれば grill に戻す |
-| ponytail / 過剰設計？ / もっと小さくできる？ | correctness / failure の骨格を先に確認し、Minimality Challenge。behavior が変わる案は decision に戻す |
+| plan review して | grill 済みなら adversarial review → minimality triage。未決定があれば grill に戻す |
+| ponytail / 過剰設計？ / もっと小さくできる？ | correctness / failure の骨格を先に確認し、Minimality Triage。candidate がある場合だけ deep review |
 | 実装してよい？ | Implementation Readiness。結論 + 確認したこと + 残り |
 | pair-review して | Plan が対象ならこの skill の review phase と同型。PR / 実装済みコードなら pair-review の責務 |
 
